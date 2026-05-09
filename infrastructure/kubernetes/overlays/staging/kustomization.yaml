@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: chat-system-staging
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: staging
+
+images:
+  - name: chat-auth-service
+    newName: ghcr.io/piyushrai98/chat-auth-service
+    newTag: latest
+
+  - name: chat-chat-service
+    newName: ghcr.io/piyushrai98/chat-chat-service
+    newTag: latest
+
+  - name: chat-message-service
+    newName: ghcr.io/piyushrai98/chat-message-service
+    newTag: latest
+
+  - name: chat-notification-service
+    newName: ghcr.io/piyushrai98/chat-notification-service
+    newTag: latest
+
+  - name: chat-api-gateway
+    newName: ghcr.io/piyushrai98/chat-api-gateway
+    newTag: latest
