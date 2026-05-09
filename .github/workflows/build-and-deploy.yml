@@ -96,7 +96,11 @@ jobs:
         uses: azure/setup-kubectl@v4
         with:
           version: 'v1.30.0'
-
+        
+      - name: Install Kustomize
+        run: |
+          curl -s https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh | bash
+          sudo mv kustomize /usr/local/bin/
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
@@ -104,17 +108,38 @@ jobs:
 
       - name: Deploy to staging
         run: |
-          # Update image tags
           export IMAGE_TAG=sha-$(git rev-parse --short HEAD)
-          cd infrastructure/kubernetes/overlays/staging
+
+          echo "Current directory:"
+          pwd
+
+          echo "Checking repository structure..."
+          ls -R infrastructure
+
+          OVERLAY_DIR="$GITHUB_WORKSPACE/infrastructure/kubernetes/overlays/staging"
+
+          echo "Using overlay directory:"
+          echo $OVERLAY_DIR
+
+          if [ ! -d "$OVERLAY_DIR" ]; then
+            echo "ERROR: Staging overlay directory not found"
+            exit 1
+          fi
+
+          cd "$OVERLAY_DIR"
+
           kustomize edit set image \
             chat-auth-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-auth-service:$IMAGE_TAG \
             chat-chat-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-chat-service:$IMAGE_TAG \
             chat-message-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-message-service:$IMAGE_TAG \
             chat-notification-service=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-notification-service:$IMAGE_TAG \
             chat-api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api-gateway:$IMAGE_TAG
-          kubectl apply -k .
-          kubectl rollout status deployment -n chat-system --timeout=10m
+
+          kubectl apply -k "$OVERLAY_DIR"
+
+          kubectl rollout status deployment/auth-service \
+          -n chat-system-staging \
+          --timeout=10m
 
   deploy-production:
     name: Deploy to Production (Blue/Green)
