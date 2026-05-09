@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: message-service
-          image: ghcr.io/your-org/chat-message-service:latest
+          image: chat-message-service
           ports:
             - containerPort: 3003
               name: http

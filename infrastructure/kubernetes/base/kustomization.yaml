@@ -13,6 +13,22 @@ resources:
   - notification-service.yaml
   - api-gateway.yaml
 
+images:
+  - name: chat-auth-service
+    newName: chat-auth-service
+
+  - name: chat-chat-service
+    newName: chat-chat-service
+
+  - name: chat-message-service
+    newName: chat-message-service
+
+  - name: chat-notification-service
+    newName: chat-notification-service
+
+  - name: chat-api-gateway
+    newName: chat-api-gateway
+
 commonLabels:
   app.kubernetes.io/part-of: chat-system
   app.kubernetes.io/managed-by: kustomize

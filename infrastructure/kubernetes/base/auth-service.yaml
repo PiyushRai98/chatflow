@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: auth-service
-          image: ghcr.io/your-org/chat-auth-service:latest
+          image: chat-auth-service
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: ghcr.io/your-org/chat-notification-service:latest
+          image: chat-notification-service
           ports:
             - containerPort: 3004
               name: http

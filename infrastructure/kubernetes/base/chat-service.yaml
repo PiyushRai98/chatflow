@@ -37,7 +37,7 @@ spec:
               app: chat-service
       containers:
         - name: chat-service
-          image: ghcr.io/your-org/chat-chat-service:latest
+          image: chat-chat-service
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3002
