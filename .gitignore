@@ -1,0 +1,49 @@
+# dependencies
+node_modules/
+
+# logs
+logs
+*.log
+npm-debug.log*
+
+# env
+.env
+.env.*
+
+# build
+dist/
+build/
+
+# coverage
+coverage/
+
+# cache
+.cache/
+.vite/
+
+# mac/windows
+.DS_Store
+Thumbs.db
+
+# docker
+*.tar
+
+# IDE
+.vscode/
+.idea/
+
+# testing
+.k6/
+
+# temporary
+tmp/
+temp/
+
+# kubernetes secrets
+secrets.yaml
+
+# uploads
+uploads/
+
+# lock files (optional)
+pnpm-lock.yaml

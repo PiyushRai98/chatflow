@@ -1,0 +1,23 @@
+{
+  "name": "@chat/notification-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "test": "jest --coverage"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "kafkajs": "^2.2.4",
+    "ioredis": "^5.4.1",
+    "web-push": "^3.6.7",
+    "dotenv": "^16.4.5",
+    "helmet": "^8.0.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "jest": "^29.7.0"
+  }
+}

@@ -1,0 +1,44 @@
+groups:
+  - name: chat-system
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 2 minutes."
+
+      - alert: HighErrorRate
+        expr: |
+          rate(gateway_http_requests_total{status_code=~"5.."}[5m])
+          / rate(gateway_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on API gateway"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5m."
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(gateway_http_request_duration_seconds_bucket[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency exceeds 1s"
+          description: "p95 latency is {{ $value }}s on {{ $labels.route }}."
+
+      - alert: KafkaConsumerLag
+        expr: kafka_consumergroup_lag > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag on {{ $labels.consumergroup }}"
+          description: "Lag is {{ $value }} messages."

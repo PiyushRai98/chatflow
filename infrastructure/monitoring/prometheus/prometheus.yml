@@ -1,0 +1,61 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: chat-system
+
+scrape_configs:
+  # Self
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # API Gateway (exposes /metrics)
+  - job_name: api-gateway
+    static_configs:
+      - targets: ['api-gateway:3000']
+    metrics_path: /metrics
+
+  # Auth service
+  - job_name: auth-service
+    static_configs:
+      - targets: ['auth-service:3001']
+    metrics_path: /metrics
+
+  # Chat service
+  - job_name: chat-service
+    static_configs:
+      - targets: ['chat-service:3002']
+    metrics_path: /metrics
+
+  # Message service
+  - job_name: message-service
+    static_configs:
+      - targets: ['message-service:3003']
+    metrics_path: /metrics
+
+  # Kubernetes pod auto-discovery (in cluster only)
+  - job_name: kubernetes-pods
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+
+# Alerting rules
+rule_files:
+  - /etc/prometheus/alerts.yml

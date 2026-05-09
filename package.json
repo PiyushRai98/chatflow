@@ -1,0 +1,26 @@
+{
+  "name": "distributed-chat-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready distributed chat system with real-time messaging",
+  "workspaces": [
+    "services/*",
+    "frontend",
+    "shared/*"
+  ],
+  "scripts": {
+    "dev:auth": "cd services/auth-service && npm run dev",
+    "dev:chat": "cd services/chat-service && npm run dev",
+    "dev:message": "cd services/message-service && npm run dev",
+    "dev:notification": "cd services/notification-service && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:gateway": "cd services/api-gateway && npm run dev",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

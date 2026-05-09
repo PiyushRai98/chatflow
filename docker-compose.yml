@@ -1,0 +1,260 @@
+version: '3.9'
+
+# Single-host development orchestration. For production, use the Kubernetes manifests.
+
+services:
+  # ── Infrastructure ──
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: chat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chat_users
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # host:container — 5432 is occupied by native Windows postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [chat-net]
+
+  mongodb:
+    image: mongo:7
+    container_name: chat-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: chat_messages
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [chat-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: chat-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [chat-net]
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: chat-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks: [chat-net]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: chat-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 6
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks: [chat-net]
+
+  # ── Application Services ──
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: chat-auth-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DATABASE: chat_users
+      PG_USER: postgres
+      PG_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-me}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports: ["3001:3001"]
+    networks: [chat-net]
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+    container_name: chat-chat-service
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3002
+      NODE_ENV: production
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      MONGODB_URI: mongodb://mongodb:27017/chat_messages
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports: ["3002:3002"]
+    networks: [chat-net]
+
+  message-service:
+    build:
+      context: .
+      dockerfile: services/message-service/Dockerfile
+    container_name: chat-message-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb:27017/chat_messages
+      KAFKA_BROKERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-chat-media-uploads}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    ports: ["3003:3003"]
+    networks: [chat-net]
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: chat-notification-service
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3004
+      KAFKA_BROKERS: kafka:29092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@chatapp.com}
+    ports: ["3004:3004"]
+    networks: [chat-net]
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: chat-api-gateway
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - chat-service
+      - message-service
+      - notification-service
+    environment:
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001
+      CHAT_SERVICE_URL: http://chat-service:3002
+      MESSAGE_SERVICE_URL: http://message-service:3003
+      NOTIFICATION_SERVICE_URL: http://notification-service:3004
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost}
+    ports: ["3000:3000"]
+    networks: [chat-net]
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: chat-frontend
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    ports: ["80:80"]
+    networks: [chat-net]
+
+  # ── Monitoring ──
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: chat-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+    networks: [chat-net]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: chat-grafana
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports: ["3030:3000"]
+    networks: [chat-net]
+
+volumes:
+  postgres-data:
+  mongo-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  chat-net:
+    driver: bridge
